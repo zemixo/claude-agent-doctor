@@ -1,16 +1,15 @@
 # claude-agent-doctor
 
-> **Your Claude Code had a bad week? This tool tells you why.**
->
-> Scans your local Claude Code session logs (`~/.claude/projects/*.jsonl`)
-> and flags 12 common problems: money wasted on Opus, agents stuck in loops,
-> sessions that cost $6K without you noticing. You apply the fixes by hand.
-> Zero tokens, zero network.
+<img src="https://raw.githubusercontent.com/zemixo/claude-agent-doctor/main/quiet-orbit-banner.svg" alt="Agent Doctor: Find the pattern. Review the fix. Zemixo pixel robot workshop." width="100%">
 
-[![npm](https://img.shields.io/npm/v/claude-agent-doctor.svg)](https://www.npmjs.com/package/claude-agent-doctor)
+Local diagnostics for Claude Code session logs. Inspect cost, loop, and
+tool-use patterns with twelve heuristic rules, then review the suggested fixes
+yourself. Zero analysis tokens. No network requests.
+
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![CI](https://github.com/XJM-free/claude-agent-doctor/actions/workflows/ci.yml/badge.svg)](https://github.com/XJM-free/claude-agent-doctor/actions/workflows/ci.yml)
-![pathologies: 12](https://img.shields.io/badge/pathologies-12-orange)
+[![CI](https://github.com/zemixo/claude-agent-doctor/actions/workflows/ci.yml/badge.svg)](https://github.com/zemixo/claude-agent-doctor/actions/workflows/ci.yml)
+
+[Quick start](#30-seconds-from-install-to-first-finding) · [Commands](#all-the-commands) · [Catalog](#the-catalog) · [Boundaries](#what-it-doesnt-do)
 
 ---
 
@@ -25,8 +24,15 @@ If none of those sound like you, you probably don't need it yet.
 
 ## 30 seconds from install to first finding
 
+Install the current source with [Bun](https://bun.sh/) and Node.js 18 or newer.
+The npm package endpoint is not currently available; use the source checkout:
+
 ```bash
-npm install -g claude-agent-doctor
+git clone https://github.com/zemixo/claude-agent-doctor.git
+cd claude-agent-doctor
+bun install --frozen-lockfile
+bun run build
+bun run link
 doctor check
 ```
 
@@ -66,9 +72,8 @@ proposed per agent, so protected roles retain their own model settings.
 
 ## Example output
 
-Output from an earlier local run, retained to illustrate the report format.
-Its totals predate turn-level window filtering and are not a validated 7-day
-benchmark:
+Illustrative report format with an example project path. These shadow-cost
+figures are not invoice totals, a benchmark, or a promise of savings:
 
 ```
 Doctor report  ·  54 sessions  ·  $20,027 total shadow spend
@@ -77,7 +82,7 @@ Doctor report  ·  54 sessions  ·  $20,027 total shadow spend
   potential weekly savings: $2,889
 
 │ RUNAWAY_SESSION  [cost · high]
-│ session b87c4e13  ~/ZStack/zstack/workspace
+│ session example01  ~/Code/example-project
 │
 │ A single session consumed > 25% of weekly spend.
 │
@@ -88,7 +93,7 @@ Doctor report  ·  54 sessions  ·  $20,027 total shadow spend
 │
 │ Fix:
 │   Inspect the transcript:
-│     agent-ledger explain b87c4e13
+│     agent-ledger explain example01
 │   Add a guardrail to your agent config:
 │     max_turns: 80
 │     max_cost_usd: 50
@@ -135,20 +140,23 @@ Two things make this different from a runtime router like
    safety / compliance auditors, and reality checkers are never auto-
    downgraded. The blast radius of a mis-route on those is too large.
 
-```
+Illustrative routing plan; evaluate model quality before applying a change:
+
+```text
 Routing suggestions
 
   1 change suggested:
 
-  dingding                  sonnet → haiku  high conf  [user]
-    ~/.claude/agents/dingding.md
-    read-only work signals (search, fetch, log) — haiku at 1/10 the cost
+  docs-reader               sonnet → haiku  high conf  [user]
+    ~/.claude/agents/docs-reader.md
+    read-only work signals (search, fetch, log) — candidate for a cheaper model; validate its output quality
 
   15 agents left unchanged (guarded roles or low-signal descriptions).
 
 Safer first experiment
-  export CLAUDE_CODE_SUBAGENT_MODEL=haiku
-  (Anthropic-official env var — instantly reversible by unsetting.)
+  Review the agent-specific suggestions above.
+  Keep orchestrator, payment, and safety roles at their current tier;
+  a global model override would bypass those guards.
 ```
 
 Export as a unified diff and apply yourself:
@@ -161,7 +169,7 @@ patch -p0 < routing.patch
 ## How it relates to `/cost` and `agent-ledger`
 
 - **`/cost`** (built-in) tells you the current session's cost. That's it.
-- **[agent-ledger](https://github.com/XJM-free/claude-agent-ledger)** aggregates past sessions into a ledger (per subagent, per model, per day).
+- **[agent-ledger](https://github.com/zemixo/claude-agent-ledger)** aggregates past sessions into a ledger (per subagent, per model, per day).
 - **`doctor`** reads the same files and looks for *patterns worth fixing*.
 
 Think of it as: ledger is `top(1)`, doctor is `pylint`. They don't overlap;
@@ -186,10 +194,10 @@ reference `agent-ledger explain <id>` for deeper forensics.
 ## Development
 
 ```bash
-git clone https://github.com/XJM-free/claude-agent-doctor
+git clone https://github.com/zemixo/claude-agent-doctor
 cd claude-agent-doctor
 bun install
-bun test           # 25 pass
+bun test
 bun run build
 bun run link
 doctor check
@@ -203,26 +211,23 @@ case study, and a copy-pasteable fix. That's the bar.
 
 ## Status
 
-v0.1.0 — 8 pathologies, 25 tests, validated on the author's own 219-session
-corpus. Pricing matches Anthropic published rates as of 2026-04; values may
-drift ±5-10% in edge cases (retries, server-tool calibration). Calibration
-PRs welcome.
+The source manifest is `0.3.0`. The catalog includes twelve rules, and current
+source also validates CLI inputs, filters usage by turn timestamp, and uses
+observed subagent invocations for routing suggestions.
 
-v0.3 ships 4 new pathologies (`LOOP_DEATH`, `RETRY_THRASH`, `CONTEXT_BLOAT`,
-`TOOL_CALL_STORM`) and grows to 53 tests.
+Cost estimates use the repository's pricing snapshot; they are not a verified
+invoice reconciliation. Model prices and log formats can change.
 
-Roadmap:
-- `v0.4` — per-subagent invocation + cost tracking (feeds better routing suggestions)
-- `v0.5` — per-project profiles, custom thresholds via `.doctor.yml`
-- `v1.0` — cross-agent support (Codex, Cursor logs)
+Planned work includes per-project thresholds and additional agent log adapters.
+These are roadmap items, not current features.
 
 ## Author
 
-[Quiet Orbit](https://github.com/XJM-free). Also maintains
-[agent-ledger](https://github.com/XJM-free/claude-agent-ledger) (cost
+[Zemixo](https://github.com/zemixo). Also maintains
+[agent-ledger](https://github.com/zemixo/claude-agent-ledger) (cost
 attribution for Claude Code) and
-[apple-presubmit-audit](https://github.com/XJM-free/apple-presubmit-audit)
-(70+ App Store rejection checks).
+[apple-presubmit-audit](https://github.com/zemixo/apple-presubmit-audit)
+(evidence-labeled App Store submission checks).
 
 ## License
 
